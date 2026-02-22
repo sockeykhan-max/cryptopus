@@ -1,0 +1,5 @@
+.vscode/
+sftp.json
+db_connect.php
+node_modules/
+*.log
