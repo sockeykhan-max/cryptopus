@@ -1,5 +1,5 @@
 <?php
-require_once 'config.php';
+require_once __DIR__ . '/config.php';
 
 // 세션 시작 (이미 시작되어 있는지 체크)
 if (session_status() == PHP_SESSION_NONE) {
@@ -60,4 +60,38 @@ function get_youtube_id($url)
         return ltrim($parts['path'], '/');
     }
     return false;
+}
+// 업비트 API 거래 내역 조회 함수
+function call_upbit_api($url, $params = [], $access_key, $secret_key)
+{
+    $query_string = http_build_query($params);
+
+    // JWT 토큰 생성
+    $payload = [
+        'access_key' => $access_key,
+        'nonce' => bin2hex(random_bytes(16)),
+    ];
+
+    if ($query_string) {
+        $payload['query_hash'] = hash('sha512', $query_string);
+        $payload['query_hash_alg'] = 'SHA512';
+    }
+
+    $header = json_encode(['alg' => 'HS256', 'typ' => 'JWT']);
+    $base64UrlHeader = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
+    $base64UrlPayload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode($payload)));
+    $signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, $secret_key, true);
+    $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
+    $token = $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
+
+    $full_url = $query_string ? $url . "?" . $query_string : $url;
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $full_url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer $token"]);
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    return json_decode($response, true);
 }

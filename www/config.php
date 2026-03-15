@@ -1,6 +1,6 @@
 <?php
 // DB 접속 정보 (db_connect.php에서 사용하므로 여기서는 변수만 정의하거나 로드)
-require_once 'db_connect.php';
+require_once __DIR__ . '/db_connect.php';
 
 // 사이트 정보
 define('SITE_NAME', 'Cryptopus');

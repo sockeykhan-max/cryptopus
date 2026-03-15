@@ -28,6 +28,58 @@ try {
             // if ($ownerId !== $_SESSION["user_id"]) {
             //     $response["message"] = "삭제 권한이 없습니다.";
             // } else {
+            // 1. 이미지 파일 경로 조회
+            $stmt = $pdo->prepare("SELECT tv_image_url, image FROM strategy_wiki WHERE id = :id");
+            $stmt->bindParam(":id", $wikiId, PDO::PARAM_INT);
+            $stmt->execute();
+            $wikiImages = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($wikiImages) {
+                $imagesToDelete = [];
+
+                // tv_image_url 처리
+                if (!empty($wikiImages['tv_image_url'])) {
+                    $imagesToDelete[] = $wikiImages['tv_image_url'];
+                }
+
+                // image 필드 처리 (파이프(|)로 구분된 경우)
+                if (!empty($wikiImages['image'])) {
+                    $wikiFileImages = explode('|', $wikiImages['image']);
+                    foreach ($wikiFileImages as $img) {
+                        $img = trim($img);
+                        if (!empty($img)) {
+                            $imagesToDelete[] = $img;
+                        }
+                    }
+                }
+
+                // 2. 실제 파일 삭제
+                foreach ($imagesToDelete as $imageUrl) {
+                    // URL에서 파일 경로 추출 (예: /uploads/image.jpg)
+                    $fullPath = dirname(__FILE__) . '/' . $imageUrl;
+
+                    // 파일이 실제로 존재하고 삭제 가능한지 확인
+                    $response["message"] .= "Debug: Full Path: " . h($fullPath) . "; ";
+                    $response["message"] .= "Debug: File Exists: " . (file_exists($fullPath) ? "true" : "false") . "; ";
+
+                    if (file_exists($fullPath)) {
+                        if (!unlink($fullPath)) {
+                            $error = error_get_last();
+                            $response["message"] .= "Debug: Unlink Error: " . h(isset($error["message"]) ? $error["message"] : "알 수 없는 unlink 오류") . "; ";
+                            $errorMessage = isset($error["message"]) ? $error["message"] : "알 수 없는 오류";
+                            if (empty($response["message"])) {
+                                $response["message"] = "파일 삭제 실패: " . h(basename($fullPath)) . " (" . h($errorMessage) . ")";
+                            } else {
+                                $response["message"] .= ", " . h(basename($fullPath)) . " (" . h($errorMessage) . ")";
+                            }
+                        }
+                    } else {
+                        // 파일이 없으면 삭제할 필요 없으므로 아무것도 하지 않음
+                    }
+                }
+            }
+
+            // 3. 위키 데이터베이스 레코드 삭제
             $stmt = $pdo->prepare("DELETE FROM strategy_wiki WHERE id = :id");
             $stmt->bindParam(":id", $wikiId, PDO::PARAM_INT);
 
