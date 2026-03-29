@@ -49,7 +49,7 @@
         <form action="login_ok.php" method="POST">
             <input type="text" name="username" placeholder="아이디" required>
             <input type="password" name="password" placeholder="비밀번호" required>
-            <button type="submit">접속하기</button>
+            <button type="submit" style="margin-top: 15px;margin-bottom: 10px;">접속하기</button>
         </form>
     </div>
 </body>

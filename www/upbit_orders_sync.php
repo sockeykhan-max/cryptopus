@@ -5,7 +5,7 @@ header('Content-Type: application/json');
 $upbit_access_key = "zD8Esci5MP93QAL3O44EXoAQ4JcPgxTR08qHjxC9";
 $upbit_secret_key = "S8XOMWkUXHn4MyfRhaohwHTgMZtHYaC92XIeK99z";
 
-$orders = call_upbit_api('https://api.upbit.com/v1/orders', ['state' => 'done', 'limit' => 100], $upbit_access_key, $upbit_secret_key);
+$orders = call_upbit_api('https://api.upbit.com/v1/orders', ['state' => 'done', 'limit' => 20], $upbit_access_key, $upbit_secret_key);
 
 if (isset($orders['error'])) {
     echo json_encode(['success' => false, 'message' => $orders['error']['message']]);

@@ -95,3 +95,50 @@ function call_upbit_api($url, $params = [], $access_key, $secret_key)
 
     return json_decode($response, true);
 }
+
+class OkxApi
+{
+    private $apiKey;
+    private $secretKey;
+    private $passphrase;
+    private $baseUrl = "https://www.okx.com";
+
+    public function __construct($key, $secret, $pass)
+    {
+        $this->apiKey = $key;
+        $this->secretKey = $secret;
+        $this->passphrase = $pass;
+    }
+
+    private function getSignature($timestamp, $method, $requestPath, $body = "")
+    {
+        $message = $timestamp . $method . $requestPath . $body;
+        return base64_encode(hash_hmac('sha256', $message, $this->secretKey, true));
+    }
+
+    public function request($method, $path, $params = [])
+    {
+        $timestamp = gmdate('Y-m-d\TH:i:s.v\Z');
+        $queryString = ($method === 'GET' && !empty($params)) ? '?' . http_build_query($params) : '';
+        $fullPath = "/api/v5" . $path . $queryString;
+
+        $ch = curl_init($this->baseUrl . $fullPath);
+        $headers = [
+            "OK-ACCESS-KEY: " . $this->apiKey,
+            "OK-ACCESS-SIGN: " . $this->getSignature($timestamp, $method, $fullPath),
+            "OK-ACCESS-TIMESTAMP: " . $timestamp,
+            "OK-ACCESS-PASSPHRASE: " . $this->passphrase,
+            "Content-Type: application/json"
+        ];
+
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        return json_decode($response, true);
+    }
+}

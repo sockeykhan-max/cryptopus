@@ -214,6 +214,9 @@ a {
   .flex.justify-between.items-center.mb-4 a.button-new {
     margin-right: 20px;
   }
+  .hide-on-mobile {
+    display: none !important;
+  }
   .mt-15px {
     margin-top: 15px;
   }
@@ -255,10 +258,10 @@ a {
   margin-top: 15px;
 }
 .logout-btn {
-  color: #ff5252;
+  color: #fff;
   text-decoration: none;
-  font-size: 1rem;
-  border: 1px solid #ff5252;
+  font-size: 0.8rem;
+  border: 1px solid #fff;
   padding: 5px 10px;
   border-radius: 4px;
 }
@@ -452,6 +455,29 @@ a {
 }
 .mt-15px {
   margin-top: 15px;
+}
+
+.dashboard-header-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.dashboard-title {
+  flex: 1;
+  text-align: left;
+}
+.dashboard-welcome {
+  flex: 1;
+  text-align: center;
+  margin: 0 !important;
+  font-size: 1rem;
+  color: #555;
+}
+.dashboard-buttons {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .dashboard-header h2 {
@@ -1425,4 +1451,41 @@ a {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(9, 54, 135, 0.3);
   color: #ffffff;
+}
+
+/* OKX Orders Button */
+.btn-okx {
+  display: inline-flex;
+  align-items: center;
+  background-color: #000000;
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+.btn-okx:hover {
+  background-color: #333333;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  color: #ffffff;
+}
+
+/* 모바일에서 Dashboard Header 세로 정렬 */
+@media (max-width: 767px) {
+  .dashboard-header-inner {
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+  }
+  .dashboard-title {
+    text-align: center;
+  }
+  .dashboard-buttons {
+    width: 100%;
+    justify-content: center;
+  }
 }

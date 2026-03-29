@@ -14,6 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $uuid = $_POST['uuid'] ?? '';
+$type = $_POST['type'] ?? 'upbit';
 $memo = $_POST['memo'] ?? null;
 $tradingview_url = $_POST['tradingview_url'] ?? null;
 $strategy_name = $_POST['strategy_name'] ?? null;
@@ -56,7 +57,11 @@ try {
     }
 
     if (!empty($update_fields)) {
-        $sql = "UPDATE upbit_orders SET " . implode(', ', $update_fields) . " WHERE uuid = :uuid";
+        if ($type === 'okx') {
+            $sql = "UPDATE okx_trade_fills SET " . implode(', ', $update_fields) . " WHERE ord_id = :uuid";
+        } else {
+            $sql = "UPDATE upbit_orders SET " . implode(', ', $update_fields) . " WHERE uuid = :uuid";
+        }
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
     }
