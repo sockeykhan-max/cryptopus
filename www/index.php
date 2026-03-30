@@ -1,5 +1,5 @@
 <?php
-require_once dirname(__FILE__) . '/header.php';
+require_once dirname(__FILE__) . '/common.php';
 check_login();
 
 // 매매 원칙 POST 처리
@@ -55,8 +55,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Content-Type: application/json');
         echo json_encode(['success' => true]);
         exit;
+    } elseif (isset($_POST['save_target_profit'])) {
+        $targetMonth = $_POST['target_month'];
+        $targetProfit = (float)$_POST['target_profit'];
+
+        try {
+            // 테이블이 없을 경우를 대비해 생성문 추가
+            $pdo->exec("CREATE TABLE IF NOT EXISTS month_target (
+                target_month VARCHAR(7) PRIMARY KEY,
+                target_profit DECIMAL(20,2) NOT NULL DEFAULT 0
+            )");
+
+            $stmt = $pdo->prepare("INSERT INTO month_target (target_month, target_profit) VALUES (?, ?) ON DUPLICATE KEY UPDATE target_profit = ?");
+            $stmt->execute([$targetMonth, $targetProfit, $targetProfit]);
+
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true]);
+            exit;
+        } catch (PDOException $e) {
+            error_log("Save target profit error: " . $e->getMessage());
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'DB 에러']);
+            exit;
+        }
     }
 }
+
+require_once dirname(__FILE__) . '/header.php';
 
 // 태그 문자열에 따라 일관된 색상을 반환하는 함수
 function getTagColor($tagStr)
@@ -445,6 +470,23 @@ try {
     error_log("OKX tags fetch error: " . $e->getMessage());
 }
 
+// OKX 계정 잔고 (Estimated total value) 조회
+$okx_total_eq = 0;
+try {
+    $apiKey = '242f8685-deb4-448d-940c-d5e0d32be456';
+    $secretKey = '83684101C963C8FC0AAEB5EDCC8A4D9A';
+    $passphrase = 'Khan160406@';
+
+    $okx = new OkxApi($apiKey, $secretKey, $passphrase);
+    // Trading 계정뿐만 아니라 모든 계정의 총 자산 평가액을 USDT 기준으로 가져옵니다.
+    $balanceRes = $okx->request('GET', '/asset/asset-valuation', ['ccy' => 'USDT']);
+    if (isset($balanceRes['code']) && $balanceRes['code'] === '0' && !empty($balanceRes['data'])) {
+        $okx_total_eq = (float)$balanceRes['data'][0]['totalBal'];
+    }
+} catch (Exception $e) {
+    error_log("OKX balance fetch error: " . $e->getMessage());
+}
+
 // OKX 날짜 필터 설정 (기본값: 최근 한달)
 $okx_start_date = $_GET['okx_start_date'] ?? date('Y-m-d', strtotime('-1 month'));
 $okx_end_date = $_GET['okx_end_date'] ?? date('Y-m-d');
@@ -822,6 +864,19 @@ try {
     error_log("OKX trades fetch error: " . $e->getMessage());
 }
 
+// 월별 목표 수익 가져오기
+$month_targets = [];
+try {
+    $stmt = $pdo->prepare("SELECT target_month, target_profit FROM month_target");
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $row) {
+        $month_targets[$row['target_month']] = (float)$row['target_profit'];
+    }
+} catch (PDOException $e) {
+    // 테이블이 없을 수도 있으므로 오류 무시
+}
+
 $wiki_search = $_GET['wiki_search'] ?? '';
 $recent_wikis = [];
 try {
@@ -1105,8 +1160,17 @@ try {
                 <!-- 일별 수익 달력 시작 -->
                 <div class="card card-top-black" style="flex: 8; padding: 24px; box-sizing: border-box;">
                     <div class="section-header" style="display: flex; align-items: center; justify-content: space-between; border-bottom: none; margin-bottom: 0; padding-bottom: 0;">
-                        <h3 style="margin: 0; color: #333;"><i class="fa-regular fa-calendar-days"></i> 수익 달력</h3>
-                        <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="flex: 1;">
+                            <h3 style="margin: 0; color: #333;"><i class="fa-regular fa-calendar-days"></i> 수익 달력</h3>
+                        </div>
+                        <div style="flex: 4; display: flex; justify-content: center; align-items: center;">
+                            <div onclick="window.openTargetProfitModal()" style="cursor: pointer; display: flex; align-items: center; gap: 20px; padding: 5px 10px; border-radius: 6px; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#f1f3f5'" onmouseout="this.style.backgroundColor='transparent'">
+                                <span style="font-size: 0.9rem; font-weight: bold; color: var(--text-muted);">Target Profit</span>
+                                <span id="targetProfitDisplay" style="font-size: 1.1rem; font-weight: 800; color: var(--accent-color);">-</span>
+                                <span id="dailyStatsDisplay" style="font-size: 0.9rem; font-weight: bold; color: var(--text-muted);"></span>
+                            </div>
+                        </div>
+                        <div style="flex: 1; display: flex; justify-content: flex-end; align-items: center; gap: 15px;">
                             <button type="button" id="calPrevMonth" style="border: none; background: none; cursor: pointer; color: var(--text-muted); font-size: 1.2rem;"><i class="fa-solid fa-chevron-left"></i></button>
                             <span id="calMonthLabel" style="font-size: 1.1rem; font-weight: bold; color: var(--text-main);"></span>
                             <button type="button" id="calNextMonth" style="border: none; background: none; cursor: pointer; color: var(--text-muted); font-size: 1.2rem;"><i class="fa-solid fa-chevron-right"></i></button>
@@ -1216,6 +1280,7 @@ try {
                     </style>
 
                     <script>
+                        const monthTargets = <?php echo json_encode($month_targets); ?>;
                         document.addEventListener('DOMContentLoaded', function() {
                             const dailyProfitData = <?php echo json_encode($daily_profit_data); ?>;
                             let currentCalDate = new Date();
@@ -1234,12 +1299,72 @@ try {
                                 originalOkxProfitHTML = okxProfitDisplayEl.innerHTML;
                             }
 
+                            window.openTargetProfitModal = function() {
+                                const year = currentCalDate.getFullYear();
+                                const month = currentCalDate.getMonth();
+                                const targetMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+                                document.getElementById('targetMonthLabel').innerText = `${year}년 ${month + 1}월 목표 수익`;
+                                document.getElementById('targetMonthInput').value = targetMonthStr;
+
+                                if (monthTargets[targetMonthStr] !== undefined) {
+                                    document.getElementById('targetProfitInput').value = monthTargets[targetMonthStr];
+                                } else {
+                                    document.getElementById('targetProfitInput').value = '';
+                                }
+
+                                document.getElementById('targetProfitModal').style.display = 'flex';
+                                setTimeout(() => document.getElementById('targetProfitInput').focus(), 100);
+                            };
+
+                            window.closeTargetProfitModal = function() {
+                                document.getElementById('targetProfitModal').style.display = 'none';
+                            };
+
+                            window.saveTargetProfit = function(e) {
+                                e.preventDefault();
+                                const form = e.target;
+                                const formData = new FormData(form);
+                                formData.append('save_target_profit', '1');
+
+                                fetch('index.php', {
+                                        method: 'POST',
+                                        body: formData
+                                    })
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.success) {
+                                            const targetMonthStr = document.getElementById('targetMonthInput').value;
+                                            const targetProfitVal = document.getElementById('targetProfitInput').value;
+                                            monthTargets[targetMonthStr] = parseFloat(targetProfitVal);
+                                            renderCalendar();
+                                            window.closeTargetProfitModal();
+                                        } else {
+                                            alert('저장 실패: ' + (data.message || '알 수 없는 오류'));
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error:', error);
+                                        alert('서버 통신 오류가 발생했습니다.');
+                                    });
+                            };
+
                             function renderCalendar() {
                                 const year = currentCalDate.getFullYear();
                                 const month = currentCalDate.getMonth();
 
                                 const monthLabel = document.getElementById('calMonthLabel');
+                                const targetMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
                                 if (monthLabel) monthLabel.innerText = `${year}. ${String(month + 1).padStart(2, '0')}`;
+
+                                const targetProfitDisplay = document.getElementById('targetProfitDisplay');
+                                if (targetProfitDisplay) {
+                                    if (monthTargets[targetMonthStr] !== undefined) {
+                                        targetProfitDisplay.innerText = Number(monthTargets[targetMonthStr]).toLocaleString('ko-KR');
+                                    } else {
+                                        targetProfitDisplay.innerText = '-';
+                                    }
+                                }
 
                                 const firstDay = new Date(year, month, 1).getDay();
                                 const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -1430,8 +1555,50 @@ try {
                                     document.getElementById('summaryWinRate').innerHTML = `<span style="color: ${winRateColor};">${monthlyWinRate.toFixed(2)}%</span>`;
                                 }
 
+                                const dailyStatsDisplay = document.getElementById('dailyStatsDisplay');
+                                if (dailyStatsDisplay) {
+                                    const today = new Date();
+                                    const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+                                    const isPastMonth = currentCalDate < new Date(today.getFullYear(), today.getMonth(), 1);
 
+                                    let elapsedDays = 0;
+                                    if (isCurrentMonth) {
+                                        elapsedDays = today.getDate();
+                                    } else if (isPastMonth) {
+                                        elapsedDays = daysInMonth;
+                                    }
 
+                                    let dailyAvgHtml = 'Daily Avg: -';
+                                    let runRateHtml = 'Run Rate: -';
+                                    let pacingHtml = 'Pacing: -';
+
+                                    if (elapsedDays > 0) {
+                                        const dailyAvg = totalMonthlyProfitUSDT / elapsedDays;
+                                        const avgColor = dailyAvg > 0 ? '#1261c4' : (dailyAvg < 0 ? '#c84a31' : 'inherit');
+                                        const avgSign = dailyAvg > 0 ? '+' : '';
+                                        dailyAvgHtml = `Daily Avg: <span style="color: ${avgColor};">${avgSign}${dailyAvg.toFixed(2)}</span>`;
+
+                                        const projectedProfit = dailyAvg * daysInMonth;
+                                        const projectedColor = projectedProfit > 0 ? '#1261c4' : (projectedProfit < 0 ? '#c84a31' : 'inherit');
+                                        const projectedSign = projectedProfit > 0 ? '+' : '';
+                                        runRateHtml = `Run Rate: <span style="color: ${projectedColor};">${projectedSign}${projectedProfit.toFixed(2)}</span>`;
+
+                                        const targetProfit = monthTargets[targetMonthStr];
+                                        if (targetProfit !== undefined && targetProfit > 0) {
+                                            const timeElapsedRate = elapsedDays / daysInMonth;
+                                            const profitAchievementRate = totalMonthlyProfitUSDT / targetProfit;
+                                            let pacing = 0;
+                                            if (timeElapsedRate > 0) {
+                                                pacing = (profitAchievementRate / timeElapsedRate) * 100;
+                                            }
+                                            const pacingColor = pacing >= 100 ? '#1261c4' : (pacing > 0 ? '#c84a31' : 'inherit');
+                                            pacingHtml = `Pacing: <span style="color: ${pacingColor};">${pacing.toFixed(2)}%</span>`;
+                                        }
+                                    }
+
+                                    // Combine all into one span with separators
+                                    dailyStatsDisplay.innerHTML = `${dailyAvgHtml} &nbsp; ${runRateHtml} &nbsp; ${pacingHtml}`;
+                                }
                             }
 
                             const prevBtn = document.getElementById('calPrevMonth');
@@ -1511,10 +1678,15 @@ try {
                 <div class="card card-top-black" style="flex: 2; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-start; padding: 24px;">
                     <div class="card-stats-item" style="padding: 0; margin-bottom: 25px; align-items: flex-start; width: 100%;">
                         <div>
-                            <span style="color: var(--text-muted); font-size: 0.75rem; font-weight: bold; display: block; margin-bottom: 5px;">TOTAL TRADES</span>
-                            <div class="stat-value" style="font-size: 1.8rem; font-weight: 800; line-height: 1;"><?php echo number_format($overall_okx_trades); ?>건</div>
+                            <span style="color: var(--text-muted); font-size: 0.75rem; font-weight: bold; display: block; margin-bottom: 10px;">ESTIMATED TOTAL VALUE</span>
+                            <div class="stat-value" style="font-size: 1.8rem; font-weight: 800; line-height: 1;"><?php echo number_format($okx_total_eq, 2); ?> <span style="font-size: 1rem; color: var(--text-muted); font-weight: bold; display: inline-block; margin-bottom: 0;">USDT</span></div>
                         </div>
-                        <div class="stat-icon" style="color: var(--border-color); font-size: 2em; flex-shrink: 0;"><i class="fa-solid fa-layer-group"></i></div>
+                        <div class="stat-icon" style="color: var(--border-color); font-size: 2em; flex-shrink: 0;"><i class="fa-solid fa-wallet"></i></div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 1rem; font-weight: bold; color: var(--text-main); padding-bottom: 10px;">
+                        <span>Overview</span>
+                        <span style="text-align: right;">TOTAL</span>
                     </div>
 
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -1926,6 +2098,26 @@ try {
         </div>
     </div><!-- .row -->
 </div><!-- .main-content-wrapper -->
+
+<!-- 목표 수익 설정 모달 -->
+<div id="targetProfitModal" style="display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div style="background-color: #fff; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f0f0f0; padding-bottom: 15px; margin-bottom: 15px;">
+            <h3 style="margin: 0; color: #333; font-size: 1.2rem;"><i class="fa-solid fa-bullseye" style="color: #555; margin-right: 8px;"></i> Target Profit 설정</h3>
+            <button type="button" onclick="closeTargetProfitModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+        </div>
+        <form id="targetProfitForm" onsubmit="window.saveTargetProfit(event)">
+            <input type="hidden" id="targetMonthInput" name="target_month">
+            <div style="margin-bottom: 20px;">
+                <label id="targetMonthLabel" style="display: block; font-weight: bold; margin-bottom: 10px; color: #333; text-align: center; font-size: 1.1rem;"></label>
+                <input type="number" step="any" id="targetProfitInput" name="target_profit" class="input-field" placeholder="목표 수익 금액 입력" required style="text-align: right; font-size: 1.1rem;">
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="submit" class="button-primary" style="padding: 10px 20px; width: 100%;">저장</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <!-- 매매 상세 정보 모달 -->
 <div id="tradeModal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
@@ -2727,6 +2919,11 @@ try {
         const wikiModalForm = document.getElementById('wikiModal');
         if (event.target === wikiModalForm) {
             wikiModalForm.style.display = 'none';
+        }
+
+        const targetProfitModal = document.getElementById('targetProfitModal');
+        if (event.target === targetProfitModal) {
+            window.closeTargetProfitModal();
         }
     });
 
