@@ -1725,6 +1725,7 @@ try {
                         <span>~</span>
                         <input type="date" name="okx_end_date" value="<?php echo h($okx_end_date); ?>" class="input-field" style="padding: 4px 8px; font-size: 0.85rem; width: auto;" onchange="this.form.submit()">
                     </form>
+                    <button type="button" id="btnFilterFailure" class="button-secondary" style="margin-left: 10px; padding: 4px 10px; font-size: 0.85rem;">패착 모아보기</button>
                     <div id="okxTotalProfitDisplay" style="margin-left: auto; margin-right: 15px; font-size: 0.95rem;">
                         <?php
                         if (!empty($okx_trade_results)) {
@@ -2358,6 +2359,35 @@ try {
         if (urlParams.has('show_principles')) {
             openPrinciplesModal();
             window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        const btnFilterFailure = document.getElementById('btnFilterFailure');
+        let isFailureFilterOn = false;
+
+        if (btnFilterFailure) {
+            btnFilterFailure.addEventListener('click', function() {
+                isFailureFilterOn = !isFailureFilterOn;
+
+                if (isFailureFilterOn) {
+                    this.classList.remove('button-secondary');
+                    this.classList.add('button-danger');
+                    this.innerText = '전체 보기';
+                } else {
+                    this.classList.remove('button-danger');
+                    this.classList.add('button-secondary');
+                    this.innerText = '패착 모아보기';
+                }
+
+                const rows = document.querySelectorAll('#okxTradeLogBody .trade-row');
+                rows.forEach(row => {
+                    const failureFactor = row.getAttribute('data-failure-factor') || '';
+                    if (isFailureFilterOn && failureFactor.trim() === '') {
+                        row.style.display = 'none';
+                    } else {
+                        row.style.display = '';
+                    }
+                });
+            });
         }
     });
 
